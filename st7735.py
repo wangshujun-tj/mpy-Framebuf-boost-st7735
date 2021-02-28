@@ -46,7 +46,7 @@ GMCTRN1 = const(0xE1)
 
 
 class ST7735(framebuf.FrameBuffer):
-    def __init__(self, width, height, spi, dc, rst, cs, rot=0, bgr=0, external_vcc=False):
+    def __init__(self, width, height, spi, dc, rst, cs, rot=0, bgr=0):
         if dc is None:
             raise RuntimeError('TFT must be initialized with a dc pin number')
         dc.init(dc.OUT, value=0)
@@ -64,7 +64,6 @@ class ST7735(framebuf.FrameBuffer):
         self.cs = cs
         self.height = height
         self.width = width
-        self.external_vcc = external_vcc
         self.buffer = bytearray(self.height * self.width*2)
         super().__init__(self.buffer, self.width, self.height, framebuf.RGB565SW, self.width)
         if (self.rot ==0):
@@ -85,12 +84,12 @@ class ST7735(framebuf.FrameBuffer):
         for command, data in (
             (COLMOD,  b"\x05"),
             (MADCTL,  pack('>B', madctl)),
-            (INVON,   None),
-
-            #(GMCTRP1, b"\0x03\0x1d\0x07\0x06\0x2e\0x2c\0x29\0x2d\0x2e\0x2e\0x37\0x3f\0x00\0x00\0x02\0x10"),
-            #(GMCTRN1, None),
             ):
             self._write(command, data)
+        if self.width==80 or self.height==80:
+            self._write(INVON, None)
+        else:
+            self._write(INVOFF, None)
         buf=bytearray(128)
         for i in range(32):
             buf[i]=i*2
@@ -123,12 +122,21 @@ class ST7735(framebuf.FrameBuffer):
             self.spi.write(data)
             self.cs.on()
     def show(self):
-        if self.rot==0 or self.rot==2:
-            self._write(CASET,pack(">HH", 26, self.width+26-1))
-            self._write(RASET,pack(">HH", 1, self.height+1-1))
+        if self.width==80 or self.height==80:
+            if self.rot==0 or self.rot==2:
+                self._write(CASET,pack(">HH", 26, self.width+26-1))
+                self._write(RASET,pack(">HH", 1, self.height+1-1))
+            else:
+                self._write(CASET,pack(">HH", 1, self.width+1-1))
+                self._write(RASET,pack(">HH", 26, self.height+26-1))
         else:
-            self._write(CASET,pack(">HH", 1, self.width+1-1))
-            self._write(RASET,pack(">HH", 26, self.height+26-1))
+            if self.rot==0 or self.rot==2:
+                self._write(CASET,pack(">HH", 0, self.width-1))
+                self._write(RASET,pack(">HH", 0, self.height-1))
+            else:
+                self._write(CASET,pack(">HH", 0, self.width-1))
+                self._write(RASET,pack(">HH", 0, self.height-1))
+            
         self._write(RAMWR,self.buffer)
     def rgb(self,r,g,b):
         return ((r&0xf8)<<8)|((g&0xfc)<<3)|((b&0xf8)>>3)
